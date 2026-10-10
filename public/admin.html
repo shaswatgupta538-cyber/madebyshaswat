@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Admin Dashboard — Made By Shaswat</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="nav">
+  <a class="brand" href="/">MADE BY SHASWAT</a>
+  <div id="navLinks"></div>
+</div>
+<div class="wrap" style="max-width:900px;">
+  <h1>Your Dashboard</h1>
+  <p class="muted">Private — only visible when logged in as admin.</p>
+
+  <div class="card">
+    <div class="row">
+      <div>
+        <label>From</label>
+        <input id="from" type="date">
+      </div>
+      <div>
+        <label>To</label>
+        <input id="to" type="date">
+      </div>
+      <button class="btn" onclick="loadStats()">Update</button>
+      <a class="btn btn-primary" id="pdfLink" href="#" target="_blank">Download PDF report</a>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3 id="totalLine">Total: $0.00</h3>
+  </div>
+
+  <div class="card">
+    <h3>By product</h3>
+    <table id="byProduct"></table>
+  </div>
+
+  <div class="card">
+    <h3>By customer</h3>
+    <table id="byCustomer"></table>
+  </div>
+
+  <div class="card">
+    <h3>Add custom work for a customer</h3>
+    <p class="muted">For work outside the Shop list — only shows up in that one customer's dashboard. They must already have an account; find them by email or their Customer ID (shown on their "My Orders" page).</p>
+    <label>Customer email or Customer ID</label>
+    <input id="cwCustomer" placeholder="customer@email.com or 12">
+    <label>Title</label>
+    <input id="cwTitle" placeholder="e.g. Custom product film — 30s cut">
+    <label>Description (optional)</label>
+    <input id="cwDesc" placeholder="Notes shown on the invoice">
+    <label>Amount (USD)</label>
+    <input id="cwAmount" type="number" placeholder="e.g. 450">
+    <div class="error" id="cwErr"></div>
+    <button class="btn btn-primary" onclick="addCustomWork()">Add to their dashboard</button>
+  </div>
+
+  <h1 style="margin-top:40px;">All orders</h1>
+  <div id="orders"></div>
+</div>
+
+<script src="auth.js"></script>
+<script>
+  const user = getUser();
+  if (!user || !user.isAdmin) window.location.href = '/login.html';
+  renderNav('navLinks');
+  const token = localStorage.getItem('token');
+
+  function qs() {
+    const from = document.getElementById('from').value;
+    const to = document.getElementById('to').value;
+    const p = new URLSearchParams();
+    if (from) p.set('from', from);
+    if (to) p.set('to', to);
+    return p.toString();
+  }
+
+  async function loadStats() {
+    const res = await fetch('/api/admin/dashboard?' + qs(), { headers: { Authorization: 'Bearer ' + token } });
+    const s = await res.json();
+    document.getElementById('totalLine').textContent = `Total: $${s.totalUsd.toFixed(2)} USD (${s.orderCount} orders, ${s.from} → ${s.to})`;
+    document.getElementById('byProduct').innerHTML = s.byProduct.map(p => `<tr><td>${p.title}</td><td>$${p.totalUsd.toFixed(2)}</td><td>${p.count} orders</td></tr>`).join('');
+    document.getElementById('byCustomer').innerHTML = s.byCustomer.map(c => `<tr><td>${c.name}</td><td>${c.email}</td><td>$${c.totalUsd.toFixed(2)}</td></tr>`).join('');
+    document.getElementById('pdfLink').href = `/api/admin/dashboard/pdf?${qs()}&token=${token}`;
+  }
+
+  async function loadOrders() {
+    const res = await fetch('/api/admin/orders', { headers: { Authorization: 'Bearer ' + token } });
+    const orders = await res.json();
+    document.getElementById('orders').innerHTML = orders.map(o => `
+      <div class="card">
+        <div class="row">
+          <strong>${o.product_title}</strong>
+          <span class="status status-${o.status}">${o.status}</span>
+        </div>
+        <p class="muted">Order #${o.id} · ${o.customer_name} · Customer #${o.customer_id} (${o.customer_email}) · $${o.amount_usd} USD</p>
+        <div class="row">
+          ${o.status === 'pending' ? `<button class="btn" onclick="markPaid(${o.id})">Mark paid</button>` : ''}
+          ${o.status !== 'completed' ? `<button class="btn btn-primary" onclick="markComplete(${o.id})">Mark complete &amp; send invoice</button>` : '<span class="muted">Invoice generated</span>'}
+        </div>
+      </div>
+    `).join('');
+  }
+
+  async function markPaid(id) {
+    await fetch(`/api/admin/orders/${id}/paid`, { method: 'POST', headers: { Authorization: 'Bearer ' + token } });
+    loadOrders();
+  }
+  async function markComplete(id) {
+    await fetch(`/api/admin/orders/${id}/complete`, { method: 'POST', headers: { Authorization: 'Bearer ' + token } });
+    loadOrders();
+  }
+
+  async function addCustomWork() {
+    const input = document.getElementById('cwCustomer').value.trim();
+    const body = {
+      title: document.getElementById('cwTitle').value,
+      description: document.getElementById('cwDesc').value,
+      amountUsd: document.getElementById('cwAmount').value,
+    };
+    if (input.includes('@')) body.customerEmail = input; else body.customerId = input;
+
+    const res = await fetch('/api/admin/custom-orders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) { document.getElementById('cwErr').textContent = data.error; return; }
+    document.getElementById('cwErr').textContent = '';
+    document.getElementById('cwTitle').value = '';
+    document.getElementById('cwDesc').value = '';
+    document.getElementById('cwAmount').value = '';
+    alert(`Added to ${data.customerName}'s dashboard (Customer #${data.customerId}).`);
+    loadOrders();
+  }
+
+  loadStats();
+  loadOrders();
+</script>
+</body>
+</html>

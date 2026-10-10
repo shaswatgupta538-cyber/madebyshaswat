@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Log in — Made By Shaswat</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="nav"><a class="brand" href="/">MADE BY SHASWAT</a></div>
+<div class="wrap" style="max-width:420px;">
+  <h1>Log in</h1>
+  <div class="card">
+    <label>Email</label>
+    <input id="email" type="email" placeholder="you@email.com">
+    <label>Password</label>
+    <input id="password" type="password" placeholder="••••••••">
+    <div class="error" id="err"></div>
+    <button class="btn btn-primary" style="width:100%;justify-content:center;" onclick="login()">Log in</button>
+  </div>
+  <p class="muted">No account? <a href="/signup.html">Sign up</a></p>
+</div>
+<script>
+  async function login() {
+    const email = document.getElementById('email').value;
+    const password = document.getElementById('password').value;
+    const res = await fetch('/api/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+    const data = await res.json();
+    if (!res.ok) { document.getElementById('err').textContent = data.error; return; }
+    localStorage.setItem('token', data.token);
+    localStorage.setItem('user', JSON.stringify(data.user));
+    const params = new URLSearchParams(window.location.search);
+    window.location.href = data.user.isAdmin ? '/admin.html' : (params.get('next') || '/account.html');
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>My Orders — Made By Shaswat</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="nav">
+  <a class="brand" href="/">MADE BY SHASWAT</a>
+  <div id="navLinks"></div>
+</div>
+<div class="wrap">
+  <h1>My Orders</h1>
+  <p class="muted" id="who"></p>
+  <p class="muted" id="cid"></p>
+  <div id="orders"></div>
+</div>
+
+<script src="auth.js"></script>
+<script>
+  const user = getUser();
+  if (!user) window.location.href = '/login.html?next=/account.html';
+  renderNav('navLinks');
+  document.getElementById('who').textContent = user ? `Logged in as ${user.name} (${user.email})` : '';
+  document.getElementById('cid').textContent = user ? `Your Customer ID: #${user.id}` : '';
+
+  async function load() {
+    const token = localStorage.getItem('token');
+    const res = await fetch('/api/orders/mine', { headers: { Authorization: 'Bearer ' + token } });
+    const orders = await res.json();
+    const el = document.getElementById('orders');
+    if (orders.length === 0) { el.innerHTML = '<p class="muted">No orders yet.</p>'; return; }
+    el.innerHTML = orders.map(o => `
+      <div class="card">
+        <div class="row">
+          <strong>${o.product_title}</strong>
+          <span class="status status-${o.status}">${o.status}</span>
+        </div>
+        <p class="muted">Order #${o.id} · ${o.symbol}${o.amount_local.toFixed(2)} ${o.currency} · placed ${new Date(o.created_at).toLocaleDateString()}</p>
+        ${o.status === 'completed'
+          ? `<a class="btn btn-primary" href="/api/orders/${o.id}/invoice?token=${token}" target="_blank">Download invoice</a>`
+          : `<span class="muted">Pay the QR code sent on WhatsApp — status updates once confirmed.</span>`}
+      </div>
+    `).join('');
+  }
+  load();
+</script>
+</body>
+</html>
